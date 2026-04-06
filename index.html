@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+<title>3D Factory Mission · I팀 InStar</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#000;overflow:hidden;font-family:'Courier New',monospace;}
+#wrap{width:100vw;height:100vh;position:relative;overflow:hidden;}
+#canvas3d{width:100%;height:100%;display:block;}
+.scanline{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,255,136,0.007) 3px,rgba(0,255,136,0.007) 4px);pointer-events:none;z-index:10;}
+.vignette{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.65) 100%);pointer-events:none;z-index:11;}
+.corner{position:absolute;width:22px;height:22px;z-index:20;}
+.corner.tl{top:10px;left:10px;border-top:2px solid #00ff88;border-left:2px solid #00ff88;}
+.corner.tr{top:10px;right:10px;border-top:2px solid #00ff88;border-right:2px solid #00ff88;}
+.corner.bl{bottom:10px;left:10px;border-bottom:2px solid #00ff88;border-left:2px solid #00ff88;}
+.corner.br{bottom:10px;right:10px;border-bottom:2px solid #00ff88;border-right:2px solid #00ff88;}
+#hud-top{position:absolute;top:12px;left:50%;transform:translateX(-50%);text-align:center;z-index:20;pointer-events:none;}
+#hud-top .t1{font-size:10px;color:#00ff88;letter-spacing:3px;}
+#hud-top .t2{font-size:8px;color:#00aa55;letter-spacing:2px;margin-top:2px;}
+#hud-tl{position:absolute;top:40px;left:14px;font-size:9px;color:#00aa55;line-height:2.1;z-index:20;pointer-events:none;}
+#hud-tr{position:absolute;top:40px;right:14px;font-size:9px;color:#00aa55;text-align:right;line-height:2.1;z-index:20;pointer-events:none;}
+#hud-bot{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);text-align:center;z-index:20;pointer-events:none;font-size:8px;color:#007744;letter-spacing:2px;}
+#hint{position:absolute;bottom:75px;left:50%;transform:translateX(-50%);background:rgba(0,255,136,0.1);border:1px solid #00ff88;padding:6px 18px;font-size:9px;color:#00ff88;letter-spacing:2px;display:none;z-index:22;animation:hpulse 1s ease-in-out infinite alternate;white-space:nowrap;}
+@keyframes hpulse{0%{opacity:0.7;}100%{opacity:1;}}
+#crosshair{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:21;}
+#crosshair .ring{width:32px;height:32px;border:1px solid rgba(0,255,136,0.35);border-radius:50%;}
+#crosshair .dot{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:4px;height:4px;background:#00ff88;border-radius:50%;}
+#crosshair .cl{position:absolute;top:50%;right:calc(100% + 4px);width:7px;height:1px;background:rgba(0,255,136,0.5);transform:translateY(-50%);}
+#crosshair .cr{position:absolute;top:50%;left:calc(100% + 4px);width:7px;height:1px;background:rgba(0,255,136,0.5);transform:translateY(-50%);}
+#crosshair .cu{position:absolute;left:50%;bottom:calc(100% + 4px);width:1px;height:7px;background:rgba(0,255,136,0.5);transform:translateX(-50%);}
+#crosshair .cd{position:absolute;left:50%;top:calc(100% + 4px);width:1px;height:7px;background:rgba(0,255,136,0.5);transform:translateX(-50%);}
+#minimap-wrap{position:absolute;bottom:40px;right:14px;z-index:20;}
+#minimap-wrap .mm-lbl{font-size:7px;color:#006633;text-align:center;letter-spacing:1px;padding:2px 0;}
+#minimap{display:block;border:1px solid rgba(0,255,136,0.25);background:rgba(0,0,0,0.7);}
+#pad{position:absolute;bottom:30px;left:0;right:0;z-index:22;display:none;pointer-events:none;}
+#joystick-wrap{position:absolute;bottom:10px;left:20px;text-align:center;pointer-events:auto;}
+#look-wrap{position:absolute;bottom:10px;right:20px;text-align:center;pointer-events:auto;}
+#joystick-base,#look-base{width:100px;height:100px;border-radius:50%;background:rgba(0,255,136,0.08);border:2px solid rgba(0,255,136,0.3);position:relative;touch-action:none;}
+#joystick-knob,#look-knob{width:40px;height:40px;border-radius:50%;background:rgba(0,255,136,0.35);border:2px solid #00ff88;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);transition:none;pointer-events:none;}
+#joy-label,#look-label{font-size:8px;color:rgba(0,255,136,0.5);letter-spacing:2px;margin-top:4px;}
+.pb{width:44px;height:44px;background:rgba(0,255,136,0.07);border:1px solid rgba(0,255,136,0.3);color:#00ff88;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:6px;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:manipulation;pointer-events:auto;}
+.pb:active{background:rgba(0,255,136,0.2);}
+.pb.wide{width:92px;font-size:9px;letter-spacing:1px;height:38px;}
+#prog-bar{position:absolute;top:0;left:0;right:0;height:2px;z-index:25;background:rgba(0,255,136,0.1);}
+#prog-fill{height:100%;background:#00ff88;width:0%;transition:width 0.5s ease;}
+.modal{position:absolute;inset:0;z-index:50;display:none;align-items:center;justify-content:center;}
+.modal.show{display:flex;}
+.mbox{background:rgba(1,5,12,0.97);border:1px solid #00ff88;padding:22px;max-width:360px;width:92%;font-family:'Courier New',monospace;}
+.mhdr{font-size:8px;color:#00aa55;letter-spacing:3px;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid rgba(0,255,136,0.2);}
+.mtag{font-size:9px;color:#ff4444;letter-spacing:2px;margin-bottom:3px;}
+.mmach{font-size:8px;color:#ffaa00;margin-bottom:10px;}
+.mq{font-size:12px;color:#00ff88;line-height:1.65;margin-bottom:14px;}
+.mchoices{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+.mchoice{padding:9px 10px;background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.22);color:#009955;font-size:11px;cursor:pointer;font-family:'Courier New',monospace;text-align:left;line-height:1.4;transition:all 0.15s;}
+.mchoice:hover:not(:disabled){background:rgba(0,255,136,0.1);color:#00ff88;border-color:#00ff88;}
+.mchoice.correct{background:rgba(0,255,136,0.14);border-color:#00ff88;color:#00ff88;}
+.mchoice.wrong{background:rgba(255,68,68,0.1);border-color:#ff4444;color:#ff5555;}
+.mchoice:disabled{cursor:default;}
+.mfb{font-size:10px;line-height:1.6;margin-top:10px;padding:8px 10px;border:1px solid;display:none;}
+.mfb.ok{background:rgba(0,255,136,0.07);border-color:rgba(0,255,136,0.35);color:#00cc66;}
+.mfb.no{background:rgba(255,68,68,0.07);border-color:rgba(255,68,68,0.35);color:#ff6666;}
+.mnext{width:100%;margin-top:10px;padding:10px;background:transparent;border:1px solid #00ff88;color:#00ff88;font-size:9px;letter-spacing:3px;cursor:pointer;font-family:'Courier New',monospace;display:none;transition:background 0.15s;}
+.mnext:hover{background:rgba(0,255,136,0.08);}
+.intro-bg{background:rgba(0,0,0,0.93);}
+.result-bg{background:rgba(0,0,0,0.93);}
+.iico{font-size:38px;margin-bottom:12px;}
+.it{font-size:12px;color:#00ff88;letter-spacing:3px;margin-bottom:3px;}
+.is{font-size:8px;color:#00aa55;letter-spacing:2px;margin-bottom:14px;}
+.idesc{font-size:10px;color:#00aa55;line-height:1.9;margin-bottom:14px;text-align:left;}
+.idesc b{color:#00ff88;}
+.ikeys{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;}
+.ikey{background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.18);padding:7px 8px;font-size:9px;color:#00aa55;}
+.ikey b{color:#00ff88;}
+.ibtn{width:100%;padding:12px;background:transparent;border:1px solid #00ff88;color:#00ff88;font-size:10px;letter-spacing:3px;cursor:pointer;font-family:'Courier New',monospace;transition:background 0.15s;}
+.ibtn:hover{background:rgba(0,255,136,0.08);}
+.rico{font-size:50px;margin-bottom:10px;animation:popIn 0.5s ease;}
+@keyframes popIn{0%{transform:scale(0.3);}70%{transform:scale(1.15);}100%{transform:scale(1);}}
+.rt{font-size:12px;color:#00ff88;letter-spacing:2px;margin-bottom:7px;}
+.rd{font-size:10px;color:#00aa55;line-height:1.7;margin-bottom:14px;}
+.rcodebox{background:rgba(0,255,136,0.04);border:1px solid rgba(0,255,136,0.28);padding:11px 13px;margin-bottom:12px;text-align:left;}
+.rcodelbl{font-size:8px;color:#006633;letter-spacing:1px;margin-bottom:4px;}
+.rcode{font-size:22px;color:#00ff88;letter-spacing:5px;font-weight:bold;}
+.rcodesu{font-size:8px;color:#00aa55;margin-top:3px;}
+.rretry{width:100%;padding:10px;background:transparent;border:1px solid rgba(0,255,136,0.35);color:#00aa55;font-size:9px;letter-spacing:2px;cursor:pointer;font-family:'Courier New',monospace;}
+.rretry:hover{background:rgba(0,255,136,0.06);}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="canvas3d"></canvas>
+  <div class="scanline"></div>
+  <div class="vignette"></div>
+  <div id="prog-bar"><div id="prog-fill"></div></div>
+  <div class="corner tl"></div><div class="corner tr"></div>
+  <div class="corner bl"></div><div class="corner br"></div>
+  <div id="hud-top">
+    <div class="t1">INSTAR SMART FACTORY · 3D MISSION</div>
+    <div class="t2" id="ht2">STAGE 0/10 · FIND THE ANOMALY</div>
+  </div>
+  <div id="hud-tl">
+    <span id="hstage" style="color:#00ff88;font-weight:bold;">STAGE 1/10</span><br>
+    <span id="hscore">SCORE: 000</span><br>
+    <span id="hsolved">SOLVED: 0/10</span>
+  </div>
+  <div id="hud-tr">
+    <span id="htime">00:00</span><br>
+    <span id="hoee">OEE: 87.4%</span><br>
+    <span id="hhealth" style="color:#ff4444;">10 ALERTS</span>
+  </div>
+  <div id="hud-bot">W/S/A/D · 이동 &nbsp;|&nbsp; 마우스 · 시점 (클릭으로 활성화) &nbsp;|&nbsp; E · 미션 시작</div>
+  <div id="crosshair">
+    <div class="ring"></div><div class="dot"></div>
+    <div class="cl"></div><div class="cr"></div>
+    <div class="cu"></div><div class="cd"></div>
+  </div>
+  <div id="hint">[ E ] 미션 시작</div>
+  <div id="minimap-wrap">
+    <canvas id="minimap" width="96" height="86"></canvas>
+    <div class="mm-lbl">MINIMAP</div>
+  </div>
+  <div id="pad">
+    <div id="joystick-wrap">
+      <div id="joystick-base">
+        <div id="joystick-knob"></div>
+      </div>
+      <div id="joy-label">이동</div>
+    </div>
+    <div id="look-wrap">
+      <div id="look-base">
+        <div id="look-knob"></div>
+      </div>
+      <div id="look-label">시점</div>
+    </div>
+    <button class="pb wide" id="pb-e" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:110px;">[ E ] 미션</button>
+  </div>
+
+  <!-- INTRO -->
+  <div class="modal intro-bg show" id="modal-intro">
+    <div class="mbox" style="text-align:center;">
+      <div class="iico">🏭</div>
+      <div class="it">3D FACTORY MISSION</div>
+      <div class="is">I팀 InStar · 스마트공장 CSR Fair</div>
+      <div class="idesc">
+        공장 내부를 <b>3D로 직접 탐험</b>하며<br>
+        이상이 발생한 기계를 찾아 <b>AR 미션을 해결</b>하세요!<br><br>
+        · 빨갛게 빛나는 기계 → <b>이상 발생</b><br>
+        · 가까이 가면 <b>[E] 미션 시작</b> 표시<br>
+        · 정답을 맞히면 기계가 <b>초록색으로 정상화</b><br>
+        · 10개 모두 해결하면 <b>완료 코드</b> 획득
+      </div>
+      <div class="ikeys">
+        <div class="ikey"><b>W A S D</b><br>이동</div>
+        <div class="ikey"><b>마우스</b><br>시점 회전</div>
+        <div class="ikey"><b>E 키</b><br>미션 시작</div>
+        <div class="ikey"><b>모바일</b><br>버튼+드래그</div>
+      </div>
+      <button class="ibtn" onclick="startGame()">[ ENTER FACTORY ]</button>
+    </div>
+  </div>
+
+  <!-- MISSION -->
+  <div class="modal" id="modal-mission" style="background:rgba(0,0,0,0.82);">
+    <div class="mbox">
+      <div class="mhdr" id="m-hdr">EMERGENCY MISSION</div>
+      <div class="mtag" id="m-tag">MISSION 01</div>
+      <div class="mmach" id="m-mach">TARGET: ---</div>
+      <div class="mq" id="m-q"></div>
+      <div class="mchoices" id="m-choices"></div>
+      <div class="mfb" id="m-fb"></div>
+      <button class="mnext" id="m-next" onclick="closeMission()">[ CONTINUE EXPLORING ]</button>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div class="modal result-bg" id="modal-result">
+    <div class="mbox" style="text-align:center;">
+      <div class="rico" id="r-ico">🏆</div>
+      <div class="rt" id="r-t">ALL MISSIONS CLEARED</div>
+      <div class="rd" id="r-d"></div>
+      <div class="rcodebox">
+        <div class="rcodelbl">COMPLETE CODE · I팀 InStar 담당자에게 보여주세요</div>
+        <div class="rcode" id="r-code">SF-MASTER</div>
+        <div class="rcodesu">I팀 InStar · 스마트공장 CSR FAIR</div>
+      </div>
+      <button class="rretry" onclick="retryGame()">[ RETRY MISSION ]</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+// ── 미션 데이터 ──────────────────────────────────────────
+var MISSIONS = [
+  { id:0, px:-6, pz:-6, hexColor:0xff3333, strColor:'#ff3333',
+    label:'PRESS C-03', tag:'미션 01 · 품질 이상', hdr:'QUALITY EMERGENCY · PRESS C-03',
+    q:'생산 라인에서 불량품이 급증하고 있습니다! 스마트공장에서 실시간으로 감지하는 핵심 기술은?',
+    choices:['작업자 육안 검사','AI 비전 카메라 자동 감지','생산 중단 전수검사','불량품 고객 교환'],
+    ans:1, fb:'AI 비전 카메라는 초당 수백 장을 분석해 0.1mm 불량도 자동으로 잡아냅니다!' },
+  { id:1, px:6, pz:-6, hexColor:0xffaa00, strColor:'#ffaa00',
+    label:'ROBOT ARM B-02', tag:'미션 02 · 설비 예측', hdr:'PREDICTIVE ALERT · ROBOT B-02',
+    q:'로봇 팔 베어링 이상 진동이 감지됐습니다! 고장을 미리 예측하는 스마트공장의 방법은?',
+    choices:['고장 나면 빠른 수리','정해진 날 정기점검','IoT 센서 실시간 모니터링','오래된 부품 교체'],
+    ans:2, fb:'IoT 진동·온도 센서가 24시간 수집하고 AI가 고장 2주 전에 미리 알려줍니다!' },
+  { id:2, px:-6, pz:6, hexColor:0xffaa00, strColor:'#ffaa00',
+    label:'WAREHOUSE D-04', tag:'미션 03 · 물류 최적화', hdr:'LOGISTICS DELAY · WAREHOUSE',
+    q:'핵심 부품을 찾지 못해 생산이 지연되고 있습니다! 스마트공장의 물류 해결책은?',
+    choices:['직원이 뛰어다니며 탐색','부품마다 스티커 부착','AGV 로봇 + WMS 도입','창고 증축'],
+    ans:2, fb:'AGV 자율주행 로봇과 WMS가 부품 탐색 시간을 90% 단축합니다!' },
+  { id:3, px:6, pz:6, hexColor:0xffaa00, strColor:'#ffaa00',
+    label:'ENERGY CTR E-01', tag:'미션 04 · 에너지 절감', hdr:'ENERGY OVERLOAD · CONTROL CTR',
+    q:'전력 피크타임에 공장 전력이 한계치를 초과했습니다! 스마트공장의 에너지 관리 방법은?',
+    choices:['전 설비 24시간 가동','EMS 피크타임 자동 조절','조명 전부 소등','태양광 패널만 설치'],
+    ans:1, fb:'EMS가 피크타임 비핵심 설비를 자동 조절해 평균 15~30% 절감합니다!' },
+  { id:4, px:0, pz:0, hexColor:0xff3333, strColor:'#ff3333',
+    label:'MAIN LINE A-01', tag:'미션 05 · 디지털 트윈', hdr:'UPGRADE REQUIRED · MAIN LINE',
+    q:'공장을 멈추지 않고 새로운 공정을 테스트해야 합니다. 어떻게 할까요?',
+    choices:['야간에 몰래 테스트','다른 공장 먼저 적용','디지털 트윈 가상 시뮬레이션','베테랑 경험에 의존'],
+    ans:2, fb:'디지털 트윈으로 가상 공장에서 수백 번 시뮬레이션 후 최적안을 적용합니다!' },
+  { id:5, px:-10, pz:0, hexColor:0xff3333, strColor:'#ff3333',
+    label:'AI SERVER F-01', tag:'미션 06 · AI 데이터 분석', hdr:'AI SYSTEM ALERT · SERVER F-01',
+    q:'공장 데이터가 폭발적으로 늘어나 분석이 불가능합니다! 스마트공장의 빅데이터 처리 방법은?',
+    choices:['직원이 엑셀로 직접 분석','AI·머신러닝 자동 분석 도입','데이터를 주기적으로 삭제','분석 담당자 대규모 채용'],
+    ans:1, fb:'AI와 머신러닝이 수백만 건의 데이터를 실시간 분석해 생산 최적화 인사이트를 제공합니다!' },
+  { id:6, px:10, pz:0, hexColor:0xffaa00, strColor:'#ffaa00',
+    label:'SAFETY SYS G-02', tag:'미션 07 · 작업자 안전', hdr:'SAFETY ALERT · SYSTEM G-02',
+    q:'작업자가 위험 구역에 접근하는 사고가 반복됩니다! 스마트공장의 안전 관리 방법은?',
+    choices:['경고 표지판 더 많이 부착','작업자 교육 반복 시행','AI 카메라 + 웨어러블 센서 도입','위험 구역 완전 폐쇄'],
+    ans:2, fb:'AI 카메라가 위험 구역 접근을 실시간 감지하고, 웨어러블 센서가 작업자 상태를 모니터링합니다!' },
+  { id:7, px:0, pz:-10, hexColor:0xff3333, strColor:'#ff3333',
+    label:'SUPPLY CHAIN H-01', tag:'미션 08 · 공급망 관리', hdr:'SUPPLY CHAIN ALERT · H-01',
+    q:'원자재 수급 불안으로 생산 차질이 발생했습니다! 스마트공장의 공급망 대응 방법은?',
+    choices:['창고에 원자재 무한정 비축','공급사 한 곳에만 집중 의존','공급망 실시간 가시성 + 다중 공급사 관리','생산량 줄여 원자재 절약'],
+    ans:2, fb:'공급망 가시성 플랫폼이 원자재 현황을 실시간 추적하고 다중 공급사로 리스크를 분산합니다!' },
+  { id:8, px:0, pz:10, hexColor:0xffaa00, strColor:'#ffaa00',
+    label:'QUALITY MES I-03', tag:'미션 09 · MES 시스템', hdr:'MES ALERT · QUALITY I-03',
+    q:'생산 지시와 실제 현장 작업이 따로 놀고 있습니다! 이를 통합 관리하는 스마트공장 핵심 시스템은?',
+    choices:['종이 작업지시서 배포','카카오톡으로 작업 지시','MES(제조실행시스템) 도입','관리자가 매시간 현장 순회'],
+    ans:2, fb:'MES(제조실행시스템)가 생산 계획부터 실적까지 실시간으로 연결하여 현장을 통합 관리합니다!' },
+  { id:9, px:-10, pz:-10, hexColor:0xff3333, strColor:'#ff3333',
+    label:'CYBER SEC J-01', tag:'미션 10 · 사이버 보안', hdr:'CYBER ATTACK · SECURITY J-01',
+    q:'공장 제어 시스템에 외부 해킹 시도가 탐지됐습니다! 스마트공장의 사이버 보안 대응은?',
+    choices:['인터넷 연결을 모두 차단','비밀번호를 복잡하게 변경','OT/IT 통합 보안 시스템 구축','해킹 발생 후 데이터 복구'],
+    ans:2, fb:'OT(운영기술)와 IT를 통합한 보안 시스템이 이상 징후를 실시간 탐지하고 공격을 차단합니다!' },
+];
+
+// ── 전역 상태 ────────────────────────────────────────────
+var threeScene, threeCamera, threeRenderer;
+var playerX = 0, playerY = 1.6, playerZ = 11;
+var camYaw = Math.PI, camPitch = 0;
+var keysDown = {};
+var machineGroups = [];
+var glowSpheres = [];
+var pointLightArr = [];
+var labelSprites = [];
+var labelCanvases = [];
+var labelCtxs = [];
+var solvedIds = {};
+var gameScore = 0;
+var gameStartTime = 0;
+var gameActive = false;
+var activeMissionId = null;
+var missionAnswered = false;
+var isPointerLocked = false;
+var animTick = 0;
+var SPEED = 0.08;
+var BOUNDS = 13.5;
+var NEAR_DIST = 3.5;
+
+// ── DOM 헬퍼 ────────────────────────────────────────────
+function el(id){ return document.getElementById(id); }
+function showModal(id){ el(id).classList.add('show'); }
+function hideModal(id){ el(id).classList.remove('show'); }
+
+// ── Three.js 초기화 ─────────────────────────────────────
+function initThree(){
+  var cvs = el('canvas3d');
+  var W = window.innerWidth;
+  var H = window.innerHeight;
+
+  threeScene = new THREE.Scene();
+  threeScene.background = new THREE.Color(0x0a1628);
+  threeScene.fog = new THREE.Fog(0x0a1628, 14, 36);
+
+  threeCamera = new THREE.PerspectiveCamera(70, W/H, 0.05, 50);
+  threeCamera.position.set(playerX, playerY, playerZ);
+
+  threeRenderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true });
+  threeRenderer.setSize(W, H);
+  threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  threeRenderer.shadowMap.enabled = true;
+
+  buildLights();
+  buildFloor();
+  buildWalls();
+  buildMachines();
+  buildDecor();
+  setupInput();
+  setupMinimap();
+
+  window.addEventListener('resize', function(){
+    var W2 = window.innerWidth, H2 = window.innerHeight;
+    threeCamera.aspect = W2/H2;
+    threeCamera.updateProjectionMatrix();
+    threeRenderer.setSize(W2, H2);
+  });
+
+  renderLoop();
+}
+
+// ── 조명 ────────────────────────────────────────────────
+function buildLights(){
+  threeScene.add(new THREE.AmbientLight(0x4466aa, 2.8));
+  threeScene.add(new THREE.AmbientLight(0xffffff, 1.2));
+  var sun = new THREE.DirectionalLight(0xffffff, 2.0);
+  sun.position.set(5, 12, 5);
+  sun.castShadow = true;
+  threeScene.add(sun);
+  var sun2 = new THREE.DirectionalLight(0x88aaff, 1.2);
+  sun2.position.set(-5, 8, -5);
+  threeScene.add(sun2);
+  var pts = [[-8,3,-8],[8,3,-8],[-8,3,8],[8,3,8],[0,3,0],[-8,3,0],[8,3,0],[0,3,-8],[0,3,8]];
+  for(var i=0;i<pts.length;i++){
+    var pl = new THREE.PointLight(0x6688cc, 1.2, 14);
+    pl.position.set(pts[i][0], pts[i][1], pts[i][2]);
+    threeScene.add(pl);
+  }
+  for(var j=0;j<5;j++){
+    var stripMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.08, 2.5),
+      new THREE.MeshLambertMaterial({ color: 0x88aaff, emissive: 0x4466cc, emissiveIntensity: 1.0 })
+    );
+    stripMesh.position.set(-8 + j*4, 5.85, 0);
+    threeScene.add(stripMesh);
+    var spl = new THREE.PointLight(0x6688ff, 1.2, 12);
+    spl.position.set(-8 + j*4, 5.6, 0);
+    threeScene.add(spl);
+  }
+}
+
+// ── 바닥 ────────────────────────────────────────────────
+function buildFloor(){
+  var floorMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(28, 28),
+    new THREE.MeshLambertMaterial({ color: 0x1a2a3e })
+  );
+  floorMesh.rotation.x = -Math.PI/2;
+  floorMesh.receiveShadow = true;
+  threeScene.add(floorMesh);
+  threeScene.add(new THREE.GridHelper(28, 28, 0x3355aa, 0x1e3355));
+  for(var tx=-3; tx<=3; tx++){
+    for(var tz=-3; tz<=3; tz++){
+      if((tx+tz)%2 === 0){
+        var tile = new THREE.Mesh(
+          new THREE.PlaneGeometry(1.9, 1.9),
+          new THREE.MeshLambertMaterial({ color: 0x1e3048 })
+        );
+        tile.rotation.x = -Math.PI/2;
+        tile.position.set(tx*3.5, 0.01, tz*3.5);
+        threeScene.add(tile);
+      }
+    }
+  }
+}
+
+// ── 벽 ──────────────────────────────────────────────────
+function buildWalls(){
+  var wallMat = new THREE.MeshLambertMaterial({ color: 0x1e3050 });
+  var innerMat = new THREE.MeshLambertMaterial({ color: 0x243a58 });
+  var wallDefs = [
+    [0,3,-13, 28,6,0.5], [0,3,13, 28,6,0.5],
+    [-13,3,0, 0.5,6,28], [13,3,0, 0.5,6,28]
+  ];
+  for(var i=0;i<wallDefs.length;i++){
+    var wd = wallDefs[i];
+    var wm = new THREE.Mesh(new THREE.BoxGeometry(wd[3],wd[4],wd[5]), wallMat);
+    wm.position.set(wd[0],wd[1],wd[2]);
+    wm.receiveShadow = true;
+    threeScene.add(wm);
+  }
+  var innerDefs = [
+    [-4.5,2.5,-1, 0.4,5,6], [4.5,2.5,1, 0.4,5,6],
+    [-1,2.5,-8.5, 6,5,0.4], [1,2.5,8.5, 6,5,0.4],
+    [-9,2.5,-4, 0.4,5,5],   [9,2.5,4, 0.4,5,5]
+  ];
+  for(var j=0;j<innerDefs.length;j++){
+    var id2 = innerDefs[j];
+    var im = new THREE.Mesh(new THREE.BoxGeometry(id2[3],id2[4],id2[5]), innerMat);
+    im.position.set(id2[0],id2[1],id2[2]);
+    im.castShadow = true;
+    threeScene.add(im);
+  }
+  var pillarMat = new THREE.MeshLambertMaterial({ color: 0x2a4268 });
+  var pillarPos = [[-12,-12],[-12,12],[12,-12],[12,12],[-12,0],[12,0],[0,-12],[0,12]];
+  for(var k=0;k<pillarPos.length;k++){
+    var pp = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.22,6,8), pillarMat);
+    pp.position.set(pillarPos[k][0], 3, pillarPos[k][1]);
+    threeScene.add(pp);
+  }
+  var ceilMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(28, 28),
+    new THREE.MeshLambertMaterial({ color: 0x152436 })
+  );
+  ceilMesh.rotation.x = Math.PI/2;
+  ceilMesh.position.y = 6;
+  threeScene.add(ceilMesh);
+}
+
+// ── 기계 ────────────────────────────────────────────────
+function buildMachines(){
+  machineGroups = [];
+  glowSpheres = [];
+  pointLightArr = [];
+  labelSprites = [];
+  labelCanvases = [];
+  labelCtxs = [];
+
+  for(var mi=0; mi<MISSIONS.length; mi++){
+    var mdef = MISSIONS[mi];
+    var grp = new THREE.Group();
+    grp.position.set(mdef.px, 0, mdef.pz);
+
+    var bodyMat = new THREE.MeshLambertMaterial({ color: 0x0f1e30 });
+    var frameMat = new THREE.MeshLambertMaterial({ color: 0x1a2e48 });
+    var accentMat = new THREE.MeshLambertMaterial({
+      color: mdef.hexColor,
+      emissive: mdef.hexColor,
+      emissiveIntensity: 0.4
+    });
+    var ledMat = new THREE.MeshLambertMaterial({
+      color: mdef.hexColor,
+      emissive: mdef.hexColor,
+      emissiveIntensity: 1.2
+    });
+
+    var baseMesh = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.25,1.6), bodyMat);
+    baseMesh.position.y = 0.125;
+    baseMesh.castShadow = true;
+    grp.add(baseMesh);
+
+    var bodyMesh = new THREE.Mesh(new THREE.BoxGeometry(1.1,1.8,0.9), frameMat);
+    bodyMesh.position.y = 1.15;
+    bodyMesh.castShadow = true;
+    grp.add(bodyMesh);
+
+    var topMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.15,1.0), frameMat);
+    topMesh.position.y = 2.125;
+    grp.add(topMesh);
+
+    var screenMesh = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.4,0.06), accentMat);
+    screenMesh.position.set(0, 1.5, 0.48);
+    grp.add(screenMesh);
+
+    var panelMesh = new THREE.Mesh(new THREE.BoxGeometry(0.9,0.45,0.06), bodyMat);
+    panelMesh.position.set(0, 0.9, 0.48);
+    grp.add(panelMesh);
+
+    for(var li=0; li<3; li++){
+      var ledMesh = new THREE.Mesh(new THREE.SphereGeometry(0.055,8,8), ledMat);
+      ledMesh.position.set(-0.22+li*0.22, 0.92, 0.52);
+      grp.add(ledMesh);
+    }
+
+    var pipeMat = new THREE.MeshLambertMaterial({ color: 0x1e3555 });
+    var pipe1 = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,1.0,8), pipeMat);
+    pipe1.position.set(0.65, 1.3, 0);
+    grp.add(pipe1);
+
+    var glowMat = new THREE.MeshBasicMaterial({
+      color: mdef.hexColor,
+      transparent: true,
+      opacity: 0.06,
+      side: THREE.BackSide
+    });
+    var glowMesh = new THREE.Mesh(new THREE.SphereGeometry(1.4,16,16), glowMat);
+    glowMesh.position.y = 1.2;
+    grp.add(glowMesh);
+    glowSpheres.push(glowMesh);
+
+    var pLight = new THREE.PointLight(mdef.hexColor, 2.0, 6);
+    pLight.position.set(0, 2.5, 0);
+    grp.add(pLight);
+    pointLightArr.push(pLight);
+
+    // 라벨 캔버스 - 고유 변수명 사용
+    var lblCvs = document.createElement('canvas');
+    lblCvs.width = 256;
+    lblCvs.height = 72;
+    var lblCtx = lblCvs.getContext('2d');
+    labelCanvases.push(lblCvs);
+    labelCtxs.push(lblCtx);
+    renderLabelCanvas(lblCtx, mdef, false);
+
+    var lblTex = new THREE.CanvasTexture(lblCvs);
+    var lblMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.8, 0.5),
+      new THREE.MeshBasicMaterial({ map: lblTex, transparent: true, depthWrite: false })
+    );
+    lblMesh.position.set(0, 3.1, 0);
+    grp.add(lblMesh);
+    labelSprites.push(lblMesh);
+
+    threeScene.add(grp);
+    machineGroups.push(grp);
+  }
+}
+
+function renderLabelCanvas(ctx, mdef, solved){
+  ctx.clearRect(0, 0, 256, 72);
+  ctx.fillStyle = 'rgba(0,0,0,0.82)';
+  ctx.fillRect(0, 0, 256, 72);
+  var col = solved ? '#00ff88' : mdef.strColor;
+  ctx.strokeStyle = col;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(2, 2, 252, 68);
+  ctx.fillStyle = col;
+  ctx.font = 'bold 14px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText((solved ? '\u2713 ' : '\u26a0 ') + mdef.label, 128, 26);
+  ctx.font = '11px Courier New';
+  ctx.fillStyle = solved ? '#00aa55' : '#aaaaaa';
+  ctx.fillText(solved ? 'RESOLVED' : mdef.tag, 128, 50);
+}
+
+// ── 장식물 ──────────────────────────────────────────────
+function buildDecor(){
+  var crateMat = new THREE.MeshLambertMaterial({ color: 0x0c1a2a });
+  var crate2Mat = new THREE.MeshLambertMaterial({ color: 0x101e2e });
+  var cratePos = [[-11,-5],[-11,5],[11,-5],[11,5],[-5,-11],[5,-11],[-5,11],[5,11]];
+  for(var ci=0; ci<cratePos.length; ci++){
+    var cx = cratePos[ci][0], cz = cratePos[ci][1];
+    var h1 = 0.7 + Math.random()*0.5;
+    var cr1 = new THREE.Mesh(new THREE.BoxGeometry(0.9,h1,0.9), crateMat);
+    cr1.position.set(cx, h1/2, cz);
+    cr1.castShadow = true;
+    threeScene.add(cr1);
+    if(Math.random() > 0.4){
+      var cr2 = new THREE.Mesh(new THREE.BoxGeometry(0.85,0.7,0.85), crate2Mat);
+      cr2.position.set(cx, h1+0.35, cz);
+      threeScene.add(cr2);
+    }
+  }
+  var tankMat = new THREE.MeshLambertMaterial({ color: 0x162238 });
+  var tankPos = [[-11,-9],[11,-9],[-11,9],[11,9]];
+  for(var ti=0; ti<tankPos.length; ti++){
+    var tank = new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.6,12), tankMat);
+    tank.position.set(tankPos[ti][0], 0.8, tankPos[ti][1]);
+    threeScene.add(tank);
+  }
+}
+
+// ── 입력 처리 ────────────────────────────────────────────
+function setupInput(){
+  var cvs = el('canvas3d');
+
+  cvs.addEventListener('click', function(){
+    if(gameActive && !isPointerLocked) cvs.requestPointerLock();
+  });
+  document.addEventListener('pointerlockchange', function(){
+    isPointerLocked = (document.pointerLockElement === cvs);
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!isPointerLocked || !gameActive) return;
+    camYaw -= e.movementX * 0.002;
+    camPitch = Math.max(-0.75, Math.min(0.75, camPitch - e.movementY * 0.002));
+  });
+  document.addEventListener('keydown', function(e){
+    keysDown[e.code] = true;
+    if(e.code === 'KeyE' && gameActive) tryInteract();
+    if(e.code === 'Escape' && isPointerLocked) document.exitPointerLock();
+  });
+  document.addEventListener('keyup', function(e){
+    keysDown[e.code] = false;
+  });
+
+  var isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  if(isMobile){
+    el('pad').style.display = 'block';
+    el('hud-bot').textContent = '왼쪽 조이스틱 이동 · 오른쪽 조이스틱 시점 · E 미션';
+  }
+
+  // ── 조이스틱 설정 ────────────────────────────────────────
+  var joyVX = 0, joyVZ = 0;
+  var lookDX = 0, lookDY = 0;
+
+  function makeJoystick(baseId, knobId, onMove, onEnd){
+    var base = el(baseId);
+    var knob = el(knobId);
+    if(!base || !knob) return;
+    var activeTouchId = null;
+    var baseRect = null;
+    var radius = 30;
+
+    function getCenter(){
+      baseRect = base.getBoundingClientRect();
+      return { x: baseRect.left + baseRect.width/2, y: baseRect.top + baseRect.height/2 };
+    }
+
+    base.addEventListener('touchstart', function(e){
+      e.preventDefault();
+      if(activeTouchId !== null) return;
+      var touch = e.changedTouches[0];
+      activeTouchId = touch.identifier;
+      var c = getCenter();
+      var dx = touch.clientX - c.x;
+      var dy = touch.clientY - c.y;
+      var dist = Math.sqrt(dx*dx+dy*dy);
+      if(dist > radius){ dx = dx/dist*radius; dy = dy/dist*radius; }
+      knob.style.transform = 'translate(calc(-50% + '+dx+'px), calc(-50% + '+dy+'px))';
+      onMove(dx/radius, dy/radius);
+    }, { passive:false });
+
+    base.addEventListener('touchmove', function(e){
+      e.preventDefault();
+      for(var i=0;i<e.changedTouches.length;i++){
+        if(e.changedTouches[i].identifier !== activeTouchId) continue;
+        var touch = e.changedTouches[i];
+        var c = getCenter();
+        var dx = touch.clientX - c.x;
+        var dy = touch.clientY - c.y;
+        var dist = Math.sqrt(dx*dx+dy*dy);
+        if(dist > radius){ dx = dx/dist*radius; dy = dy/dist*radius; }
+        knob.style.transform = 'translate(calc(-50% + '+dx+'px), calc(-50% + '+dy+'px))';
+        onMove(dx/radius, dy/radius);
+      }
+    }, { passive:false });
+
+    function endTouch(e){
+      for(var i=0;i<e.changedTouches.length;i++){
+        if(e.changedTouches[i].identifier === activeTouchId){
+          activeTouchId = null;
+          knob.style.transform = 'translate(-50%, -50%)';
+          onEnd();
+        }
+      }
+    }
+    base.addEventListener('touchend', endTouch, { passive:false });
+    base.addEventListener('touchcancel', endTouch, { passive:false });
+  }
+
+  makeJoystick('joystick-base','joystick-knob',
+    function(nx, ny){ joyVX = nx; joyVZ = ny; },
+    function(){ joyVX = 0; joyVZ = 0; }
+  );
+  makeJoystick('look-base','look-knob',
+    function(nx, ny){ lookDX = nx * 0.04; lookDY = ny * 0.03; },
+    function(){ lookDX = 0; lookDY = 0; }
+  );
+
+  // 매 프레임 조이스틱 값 적용
+  var origRender = renderLoop;
+  window._joyVX = function(){ return joyVX; };
+  window._joyVZ = function(){ return joyVZ; };
+  window._lookDX = function(){ return lookDX; };
+  window._lookDY = function(){ return lookDY; };
+
+  el('pb-e').addEventListener('click', tryInteract);
+  el('pb-e').addEventListener('touchstart', function(e){ e.preventDefault(); tryInteract(); }, { passive:false });
+}
+
+// ── 미니맵 ──────────────────────────────────────────────
+function setupMinimap(){
+  var mmCvs = el('minimap');
+  var mmCtx = mmCvs.getContext('2d');
+  setInterval(function(){
+    mmCtx.fillStyle = '#040a12';
+    mmCtx.fillRect(0, 0, 96, 86);
+    mmCtx.strokeStyle = 'rgba(0,255,136,0.15)';
+    mmCtx.strokeRect(1, 1, 94, 84);
+    var sc = 86/28, ox = 48, oz = 43;
+    for(var mi=0; mi<MISSIONS.length; mi++){
+      var mdef = MISSIONS[mi];
+      var mx = ox + mdef.px*sc, mz = oz + mdef.pz*sc;
+      mmCtx.beginPath();
+      mmCtx.arc(mx, mz, 4, 0, Math.PI*2);
+      mmCtx.fillStyle = solvedIds[mi] ? '#00ff88' : mdef.strColor;
+      mmCtx.fill();
+    }
+    var ppx = ox + playerX*sc, ppz = oz + playerZ*sc;
+    mmCtx.save();
+    mmCtx.translate(ppx, ppz);
+    mmCtx.rotate(camYaw + Math.PI);
+    mmCtx.fillStyle = '#00ff88';
+    mmCtx.beginPath();
+    mmCtx.moveTo(0,-5); mmCtx.lineTo(3,4); mmCtx.lineTo(-3,4);
+    mmCtx.closePath(); mmCtx.fill();
+    mmCtx.restore();
+  }, 100);
+}
+
+// ── 미션 상호작용 ─────────────────────────────────────────
+function tryInteract(){
+  if(activeMissionId !== null || !gameActive) return;
+  for(var mi=0; mi<MISSIONS.length; mi++){
+    if(solvedIds[mi]) continue;
+    var mdef = MISSIONS[mi];
+    var dx = playerX - mdef.px;
+    var dz = playerZ - mdef.pz;
+    var dist = Math.sqrt(dx*dx + dz*dz);
+    if(dist < NEAR_DIST){
+      openMission(mi);
+      return;
+    }
+  }
+}
+
+function openMission(mIdx){
+  activeMissionId = mIdx;
+  missionAnswered = false;
+  if(isPointerLocked) document.exitPointerLock();
+
+  var mdef = MISSIONS[mIdx];
+  el('m-hdr').textContent = mdef.hdr;
+  el('m-tag').textContent = '[ ' + mdef.tag + ' ]';
+  el('m-mach').textContent = 'TARGET: ' + mdef.label;
+  el('m-q').textContent = mdef.q;
+
+  var fbEl = el('m-fb');
+  fbEl.style.display = 'none';
+  fbEl.className = 'mfb';
+
+  var nxtEl = el('m-next');
+  nxtEl.style.display = 'none';
+  nxtEl.textContent = '[ CONTINUE EXPLORING ]';
+
+  var choicesEl = el('m-choices');
+  choicesEl.innerHTML = '';
+  for(var ci=0; ci<mdef.choices.length; ci++){
+    var btn = document.createElement('button');
+    btn.className = 'mchoice';
+    btn.textContent = '[' + (ci+1) + '] ' + mdef.choices[ci];
+    btn.setAttribute('data-idx', ci);
+    btn.onclick = (function(idx){ return function(){ pickAnswer(idx, mIdx); }; })(ci);
+    choicesEl.appendChild(btn);
+  }
+  showModal('modal-mission');
+}
+
+function pickAnswer(choiceIdx, mIdx){
+  if(missionAnswered) return;
+  missionAnswered = true;
+  var mdef = MISSIONS[mIdx];
+  var btns = document.querySelectorAll('.mchoice');
+  for(var i=0; i<btns.length; i++) btns[i].disabled = true;
+
+  var isOk = (choiceIdx === mdef.ans);
+  btns[choiceIdx].className = 'mchoice ' + (isOk ? 'correct' : 'wrong');
+  if(!isOk) btns[mdef.ans].className = 'mchoice correct';
+
+  var fbEl = el('m-fb');
+  fbEl.className = 'mfb ' + (isOk ? 'ok' : 'no');
+  fbEl.innerHTML = (isOk ? '\u2713 CORRECT · ' : '\u2717 INCORRECT · ') + mdef.fb;
+  fbEl.style.display = 'block';
+
+  if(isOk){
+    gameScore++;
+    solvedIds[mIdx] = true;
+    markMachineSolved(mIdx);
+  }
+  updateHUD();
+  var nxtEl = el('m-next');
+  nxtEl.style.display = 'block';
+  var solvedCount = Object.keys(solvedIds).length;
+  if(solvedCount >= MISSIONS.length){
+    nxtEl.textContent = '[ MISSION COMPLETE ]';
+  }
+}
+
+function closeMission(){
+  hideModal('modal-mission');
+  activeMissionId = null;
+  var solvedCount = Object.keys(solvedIds).length;
+  if(solvedCount >= MISSIONS.length){
+    setTimeout(showResult, 500);
+  }
+}
+
+function markMachineSolved(mIdx){
+  var mdef = MISSIONS[mIdx];
+  var grp = machineGroups[mIdx];
+  // 글로우 색상 변경
+  glowSpheres[mIdx].material.color.set(0x00ff88);
+  pointLightArr[mIdx].color.set(0x00ff88);
+  // 그룹 내 재질 색상 변경
+  grp.traverse(function(obj){
+    if(obj.isMesh && obj.material){
+      if(typeof obj.material.emissive !== 'undefined' && obj.material.emissive !== null){
+        if(obj.material.color.getHex() === mdef.hexColor){
+          obj.material.color.set(0x00ff88);
+          obj.material.emissive.set(0x00ff88);
+        }
+      }
+    }
+  });
+  // 라벨 업데이트
+  var ctx = labelCtxs[mIdx];
+  renderLabelCanvas(ctx, mdef, true);
+  labelSprites[mIdx].material.map.needsUpdate = true;
+  // 진행 바
+  var cnt = Object.keys(solvedIds).length;
+  el('prog-fill').style.width = (cnt / MISSIONS.length * 100) + '%';
+}
+
+// ── HUD 업데이트 ─────────────────────────────────────────
+function updateHUD(){
+  var cnt = Object.keys(solvedIds).length;
+  el('hscore').textContent = 'SCORE: ' + String(gameScore * 100).padStart(3,'0');
+  el('hsolved').textContent = 'SOLVED: ' + cnt + '/' + MISSIONS.length;
+  el('hstage').textContent = 'STAGE ' + Math.min(cnt+1, MISSIONS.length) + '/' + MISSIONS.length;
+  el('ht2').textContent = 'STAGE ' + cnt + '/' + MISSIONS.length + ' · ' + (cnt < MISSIONS.length ? 'FIND THE ANOMALY' : 'ALL CLEAR');
+  var rem = MISSIONS.length - cnt;
+  var healthEl = el('hhealth');
+  if(rem === 0){
+    healthEl.textContent = 'ALL CLEAR';
+    healthEl.style.color = '#00ff88';
+  } else {
+    healthEl.textContent = rem + ' ALERTS';
+    healthEl.style.color = '#ff4444';
+  }
+}
+
+// ── 결과 화면 ────────────────────────────────────────────
+function showResult(){
+  var ico, title, desc, code;
+  if(gameScore === MISSIONS.length){
+    ico='🏆'; title='ALL MISSIONS CLEARED';
+    desc='10/10 완벽 해결! 당신은 스마트공장 최고 엔지니어입니다. 공장이 100% 정상화되었습니다.';
+    code='SF-MASTER';
+  } else if(gameScore >= 7){
+    ico='🤖'; title='MISSIONS CLEARED';
+    desc=gameScore+'/10 미션 해결! 스마트공장의 핵심 개념을 잘 이해하고 있습니다!';
+    code='SF-CLEAR';
+  } else if(gameScore >= 4){
+    ico='⚙️'; title='GOOD EFFORT';
+    desc=gameScore+'/10 미션 해결. 조금만 더 배우면 완벽한 전문가가 될 수 있어요!';
+    code='SF-START';
+  } else {
+    ico='🔧'; title='MISSION ENDED';
+    desc=gameScore+'/10 미션 해결. 오늘 부스에서 더 많은 것을 배워가세요!';
+    code='SF-LEARN';
+  }
+  el('r-ico').textContent = ico;
+  el('r-t').textContent = title;
+  el('r-d').textContent = desc;
+  el('r-code').textContent = code;
+  showModal('modal-result');
+}
+
+// ── 게임 시작 / 재시작 ───────────────────────────────────
+function startGame(){
+  hideModal('modal-intro');
+  gameActive = true;
+  gameStartTime = Date.now();
+  playerX = 0; playerY = 1.6; playerZ = 11;
+  camYaw = Math.PI; camPitch = 0;
+  updateHUD();
+}
+
+function retryGame(){
+  hideModal('modal-result');
+  solvedIds = {};
+  gameScore = 0;
+  activeMissionId = null;
+  for(var mi=0; mi<MISSIONS.length; mi++){
+    var mdef = MISSIONS[mi];
+    glowSpheres[mi].material.color.set(mdef.hexColor);
+    pointLightArr[mi].color.set(mdef.hexColor);
+    machineGroups[mi].traverse(function(obj){
+      if(obj.isMesh && obj.material){
+        if(typeof obj.material.emissive !== 'undefined' && obj.material.emissive !== null){
+          if(obj.material.color.getHex() === 0x00ff88){
+            obj.material.color.set(mdef.hexColor);
+            obj.material.emissive.set(mdef.hexColor);
+          }
+        }
+      }
+    });
+    renderLabelCanvas(labelCtxs[mi], mdef, false);
+    labelSprites[mi].material.map.needsUpdate = true;
+  }
+  el('prog-fill').style.width = '0%';
+  playerX = 0; playerY = 1.6; playerZ = 11;
+  camYaw = Math.PI; camPitch = 0;
+  gameStartTime = Date.now();
+  updateHUD();
+}
+
+window.startGame = startGame;
+window.retryGame = retryGame;
+window.closeMission = closeMission;
+
+// ── 시계 ────────────────────────────────────────────────
+setInterval(function(){
+  if(!gameActive) return;
+  var elapsed = Math.floor((Date.now() - gameStartTime) / 1000);
+  var mm = Math.floor(elapsed/60).toString().padStart(2,'0');
+  var ss = (elapsed%60).toString().padStart(2,'0');
+  el('htime').textContent = mm + ':' + ss;
+  el('hoee').textContent = 'OEE: ' + (87 + Math.random()*2 - 1).toFixed(1) + '%';
+}, 1000);
+
+// ── 렌더 루프 ────────────────────────────────────────────
+function renderLoop(){
+  requestAnimationFrame(renderLoop);
+  animTick += 0.04;
+
+  if(gameActive && activeMissionId === null){
+    var sinY = Math.sin(camYaw), cosY = Math.cos(camYaw);
+    var mvX = 0, mvZ = 0;
+    // 키보드 입력
+    if(keysDown['KeyW']){ mvX += sinY*SPEED; mvZ += cosY*SPEED; }
+    if(keysDown['KeyS']){ mvX -= sinY*SPEED; mvZ -= cosY*SPEED; }
+    if(keysDown['KeyA']){ mvX += cosY*SPEED; mvZ -= sinY*SPEED; }
+    if(keysDown['KeyD']){ mvX -= cosY*SPEED; mvZ += sinY*SPEED; }
+    // 조이스틱 입력
+    var jx = window._joyVX ? window._joyVX() : 0;
+    var jz = window._joyVZ ? window._joyVZ() : 0;
+    if(jx !== 0 || jz !== 0){
+      mvX += (sinY*jz + cosY*jx) * SPEED;
+      mvZ += (cosY*jz - sinY*jx) * SPEED;
+    }
+    // 오른쪽 조이스틱 시점
+    var ldx = window._lookDX ? window._lookDX() : 0;
+    var ldy = window._lookDY ? window._lookDY() : 0;
+    if(ldx !== 0) camYaw -= ldx;
+    if(ldy !== 0) camPitch = Math.max(-0.75, Math.min(0.75, camPitch - ldy));
+
+    playerX = Math.max(-BOUNDS, Math.min(BOUNDS, playerX + mvX));
+    playerZ = Math.max(-BOUNDS, Math.min(BOUNDS, playerZ + mvZ));
+  }
+
+  threeCamera.position.set(playerX, playerY, playerZ);
+  var qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), camYaw);
+  var qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), camPitch);
+  threeCamera.quaternion.copy(qY).multiply(qX);
+
+  // 글로우 / 포인트라이트 맥동
+  for(var gi=0; gi<glowSpheres.length; gi++){
+    if(solvedIds[gi]){
+      glowSpheres[gi].material.opacity = 0.06 + Math.sin(animTick*0.5+gi)*0.02;
+      pointLightArr[gi].intensity = 1.4 + Math.sin(animTick*0.5+gi)*0.3;
+    } else {
+      glowSpheres[gi].material.opacity = 0.05 + Math.abs(Math.sin(animTick+gi*1.3))*0.07;
+      pointLightArr[gi].intensity = 1.8 + Math.sin(animTick*1.5+gi)*0.6;
+    }
+  }
+
+  // 라벨 빌보드
+  for(var li=0; li<labelSprites.length; li++){
+    labelSprites[li].lookAt(threeCamera.position);
+  }
+
+  // 가까운 기계 감지
+  var nearAny = false;
+  for(var ni=0; ni<MISSIONS.length; ni++){
+    if(solvedIds[ni]) continue;
+    var ndx = playerX - MISSIONS[ni].px;
+    var ndz = playerZ - MISSIONS[ni].pz;
+    if(Math.sqrt(ndx*ndx + ndz*ndz) < NEAR_DIST){ nearAny = true; break; }
+  }
+  el('hint').style.display = nearAny ? 'block' : 'none';
+
+  threeRenderer.render(threeScene, threeCamera);
+}
+
+// ── 시작 ─────────────────────────────────────────────────
+initThree();
+
+})();
+</script>
+</body>
+</html>
